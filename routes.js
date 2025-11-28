@@ -40,6 +40,7 @@ router.get('/:id', async (req, res) => {
     const result = await sql.query`
         SELECT 
             a.ListingID, a.Title, a.Description, a.ListingDate, a.Location, 
+            a.PhotoFileName,
             b.CategoryId, b.Name as ListingTitle
         FROM [dbo].[Listing] a
         INNER JOIN [dbo].[Category] b
