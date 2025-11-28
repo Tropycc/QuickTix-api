@@ -6,7 +6,7 @@ const router = express.Router();
 
 const db_connection_string = process.env.DB_CONNECTION_STRING;
 
-// GET: /api/photos
+// GET: /api/listings
 router.get('/', async (req, res) => {    
     await sql.connect(db_connection_string);
 
@@ -21,19 +21,18 @@ router.get('/', async (req, res) => {
             ON a.[CategoryId] = b.[CategoryId]
         INNER JOIN [dbo].[Owner] c
             ON a.[OwnerID] = c.[OwnerID]
-        WHERE a.[ListingID] = 1
     `;
 
     res.json(result.recordset);
 });
 
 
-// GET: /api/photos/:id
+// GET: /api/listings/:id
 router.get('/:id', async (req, res) => {
     const id = req.params.id;
 
     if (isNaN(id)) {
-        return res.status(400).json({ error: "Invalid listing ID. It must be a number." });
+        return res.status(400).json({ message: "Invalid listing ID. It must be a number." });
     }
 
     await sql.connect(db_connection_string);
@@ -49,33 +48,54 @@ router.get('/:id', async (req, res) => {
     `;
 
     if (result.recordset.length === 0) {
-        return res.status(404).json({ error: 'Listing not found.' });
+        return res.status(404).json({ message: 'Listing not found.' });
     }
 
     res.json(result.recordset);
 });
 
 
-// POST: /api/photos/purchases
+// POST: /api/listings/purchases
 router.post('/purchases', async (req, res) => {
-    const purchases = req.body;
+    console.log("RAW BODY:", req.body);
 
-    // TODO: Validate input
+    const { BuyerName, BuyerEmail, Quantity, ListingId } = req.body;
 
-    await sql.connect(db_connection_string);
+    try {
+        await sql.connect(db_connection_string);
 
-    const result = await sql.query`
-        INSERT INTO [dbo].[Purchases]
-        (BuyerName, BuyerEmail, PurchaseDate, PurchaseId)
-        VALUES
-        (${purchases.BuyerName}, ${purchases.BuyerEmail}, ${purchases.PurchaseDate}, ${purchases.PurchaseId})
-    `;
+        // Get ticket price from Listing
+        const listingResult = await sql.query`
+            SELECT TicketPrice 
+            FROM [dbo].[Listing]
+            WHERE ListingId = ${ListingId}
+        `;
 
-    if (result.rowsAffected[0] === 0) {
-        return res.status(500).json({ error: 'Failed to complete purchase.' });
+        if (listingResult.recordset.length === 0) {
+            return res.status(404).json({ message: 'Listing not found.' });
+        }
+
+        const PricePerTicket = listingResult.recordset[0].TicketPrice;
+        const TotalPrice = PricePerTicket * Quantity;
+
+        // Insert purchase with server-calculated pricing and current datetime
+        const result = await sql.query`
+            INSERT INTO [dbo].[Purchase]
+            (BuyerName, BuyerEmail, PurchaseDate, Quantity, PricePerTicket, TotalPrice, ListingId)
+            VALUES
+            (${BuyerName}, ${BuyerEmail}, GETDATE(), ${Quantity}, ${PricePerTicket}, ${TotalPrice}, ${ListingId})
+        `;
+
+        if (result.rowsAffected[0] === 0) {
+            return res.status(500).json({ message: 'Failed to complete purchase.' });
+        }
+
+        res.status(201).json({ message: 'Purchase inserted into db.' });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error inserting purchase.' });
     }
-
-    res.send('Purchase inserted into db.');
 });
 
 export default router;
