@@ -51,7 +51,7 @@ router.get('/:id', async (req, res) => {
         return res.status(404).json({ message: 'Listing not found.' });
     }
 
-    res.json(result.recordset);
+    res.json(result.recordset[0]);
 });
 
 
