@@ -26,6 +26,21 @@ router.get('/', async (req, res) => {
     res.json(result.recordset);
 });
 
+// GET: /api/listings/categories
+router.get('/categories', async (req, res) => {
+    try {
+        await sql.connect(db_connection_string);
+        const result = await sql.query`
+            SELECT CategoryId, Name
+            FROM [dbo].[Category]
+            ORDER BY Name
+        `;
+        res.json(result.recordset);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error fetching categories.' });
+    }
+});
 
 // GET: /api/listings/:id
 router.get('/:id', async (req, res) => {
@@ -60,7 +75,15 @@ router.get('/:id', async (req, res) => {
 router.post('/purchases', async (req, res) => {
     console.log("RAW BODY:", req.body);
 
-    const { BuyerName, BuyerEmail, Quantity, ListingId } = req.body;
+    const { 
+        BuyerName, 
+        BuyerEmail, 
+        Quantity, 
+        ListingId,
+        CVV,
+        CreditCardNumber,
+        ExpirationDate
+    } = req.body;
 
     try {
         await sql.connect(db_connection_string);
@@ -79,12 +102,14 @@ router.post('/purchases', async (req, res) => {
         const PricePerTicket = listingResult.recordset[0].TicketPrice;
         const TotalPrice = PricePerTicket * Quantity;
 
-        // Insert purchase with server-calculated pricing and current datetime
+        // Insert purchase with server-calculated pricing + credit card fields
         const result = await sql.query`
             INSERT INTO [dbo].[Purchase]
-            (BuyerName, BuyerEmail, PurchaseDate, Quantity, PricePerTicket, TotalPrice, ListingId)
+            (BuyerName, BuyerEmail, PurchaseDate, Quantity, PricePerTicket, TotalPrice, ListingId,
+             CVV, CreditCardNumber, ExpirationDate)
             VALUES
-            (${BuyerName}, ${BuyerEmail}, GETDATE(), ${Quantity}, ${PricePerTicket}, ${TotalPrice}, ${ListingId})
+            (${BuyerName}, ${BuyerEmail}, GETDATE(), ${Quantity}, ${PricePerTicket}, ${TotalPrice}, ${ListingId},
+             ${CVV}, ${CreditCardNumber}, ${ExpirationDate})
         `;
 
         if (result.rowsAffected[0] === 0) {
